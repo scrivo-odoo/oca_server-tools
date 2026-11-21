@@ -449,9 +449,29 @@ class FetchmailServerFolder(models.Model):
         )
         return None
 
+    def _check_attach_target(self, record):
+        """Refuse a record that is not of the model this folder attaches mail to.
+
+        The message is written with the model of the folder and the id of the record,
+        so a record of another model would put the mail on whatever record of the
+        folder's model has the same number.
+        """
+        self.ensure_one()
+        if record._name != self.model_id.model:
+            raise UserError(
+                _(
+                    "Folder %(folder)s attaches mail to %(model)s, but the chosen "
+                    "record is of %(record_model)s. Nothing was attached.",
+                    folder=self.path,
+                    model=self.model_id.model,
+                    record_model=record._name,
+                )
+            )
+
     def attach_mail(self, match_object, message_dict):
         """Attach mail to match_object."""
         self.ensure_one()
+        self._check_attach_target(match_object)
         partner = False
         model_name = self.model_id.model
         if model_name == "res.partner":

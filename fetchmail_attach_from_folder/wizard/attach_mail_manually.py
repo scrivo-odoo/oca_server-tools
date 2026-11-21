@@ -59,11 +59,18 @@ class AttachMailManually(models.TransientModel):
         self.ensure_one()
         folder = self.folder_id
         server = folder.server_id
+        # A line nobody chose is stored as `model,-1`, which reads back as a record
+        # with a negative id: it is no choice.
+        mails = self.mail_ids.filtered(
+            lambda mail: mail.object_id and mail.object_id.id > 0
+        )
+        # All lines are checked before the first one is attached or the mailbox is
+        # touched: one wrong line stops the wizard, not the lines after it.
+        for mail in mails:
+            folder._check_attach_target(mail.object_id)
         connection = server._connect__()
         folder._select_folder(connection)
-        for mail in self.mail_ids:
-            if not mail.object_id:
-                continue
+        for mail in mails:
             message_uid = mail.message_uid
             mail_message = folder._get_message_dict(
                 folder.fetch_msg(connection, message_uid)
@@ -88,6 +95,18 @@ class AttachMailManuallyMail(models.TransientModel):
     date = fields.Datetime(readonly=True)
     email_from = fields.Char("From", readonly=True)
     body = fields.Html(readonly=True)
-    object_id = fields.Reference(
-        lambda self: [(m.model, m.name) for m in self.env["ir.model"].search([])]
-    )
+    object_id = fields.Reference(selection="_selection_object_id")
+
+    @api.model
+    def _selection_object_id(self):
+        """The model of the folder the wizard was opened on; any model without one.
+
+        Odoo evaluates this selection with the context of the request, which for the
+        wizard carries `folder_id`, and refuses a value of a model outside it.
+        """
+        folder = self.env["fetchmail.server.folder"].browse(
+            self.env.context.get("folder_id")
+        )
+        if folder:
+            return [(folder.model_id.model, folder.model_id.name)]
+        return [(m.model, m.name) for m in self.env["ir.model"].search([])]
