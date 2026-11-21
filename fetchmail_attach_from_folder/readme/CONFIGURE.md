@@ -26,3 +26,18 @@ Odoo standard
 
 This is stricly speaking no matching algorithm, but calls the model's standard
 action on new incoming mail, which is usually creating a new record.
+
+A folder that changes nothing in the mailbox
+--------------------------------------------
+
+To read a folder of a mailbox that people use, so that nothing in it changes,
+check `Process Only Specified Folders` on the server (its INBOX is then not
+pulled by Odoo at all) and set the folder to `Mark email as seen`: `Never`,
+`Flag Non-Matching Emails` off, `Delete Matched Emails` off and no
+`Archive Folder`. A folder set like this is opened read-only: mail is read
+without being marked as seen, flagged, moved or deleted, and mail that its
+owner marked as deleted stays where it is. Any other setting writes to the
+mailbox as it says, and the folder is then opened for writing.
+
+The scheduled action `Mail: Fetchmail Service` pulls the folders of every
+confirmed server, and so does `Fetch Now` on the server.

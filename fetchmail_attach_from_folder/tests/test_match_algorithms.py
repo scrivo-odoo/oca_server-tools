@@ -45,7 +45,7 @@ def get_message_body(email, subject):
 
 
 class MockConnection:
-    def select(self, path=None):
+    def select(self, path=None, readonly=False):
         return ("OK",)
 
     def create(self, path):
@@ -132,7 +132,9 @@ class TestMatchAlgorithms(TransactionCase):
             ],
             limit=1,
         )
-        cls.partner_category = cls.env.ref("base.res_partner_category_12")
+        cls.partner_category = cls.env["res.partner.category"].create(
+            {"name": "Set by the server action of a folder"}
+        )
         cls.server_action = cls.env["ir.actions.server"].create(
             {
                 "name": "Action Set Active Partner",
