@@ -71,10 +71,23 @@ class FetchmailServer(models.Model):
         self.state = "draft"
         return result
 
-    def fetch_mail(self, **kwargs):
-        result = True
-        for this in self:
-            if not this.folders_only:
-                result = result and super(FetchmailServer, this).fetch_mail(**kwargs)
-            this.folder_ids.fetch_mail()
-        return result
+    def _fetch_mail(self, batch_limit=50):
+        """Pull the INBOX of the servers Odoo pulls and the folders of every server.
+
+        A server marked "folders only" is not handed to Odoo at all: its INBOX is
+        neither read nor marked as seen and none of its mail is routed. The scheduled
+        pull and the button of the server both come through here.
+        """
+        folders_only = self.filtered("folders_only")
+        plain = self - folders_only
+        result_exception = None
+        if plain:
+            result_exception = super(FetchmailServer, plain)._fetch_mail(
+                batch_limit=batch_limit
+            )
+        for server in self:
+            server.folder_ids.fetch_mail()
+        folders_only.with_context(fetchmail_cron_running=True).write(
+            {"date": fields.Datetime.now()}
+        )
+        return result_exception
