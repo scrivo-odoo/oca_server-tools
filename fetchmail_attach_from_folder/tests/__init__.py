@@ -2,3 +2,6 @@
 
 from . import test_attach_mail_manually
 from . import test_match_algorithms
+from . import test_pull_leaves_mailbox
+from . import test_wizard_on_real_folder
+from . import test_server_form
