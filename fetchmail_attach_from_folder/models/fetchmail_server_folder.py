@@ -136,7 +136,7 @@ class FetchmailServerFolder(models.Model):
         for this in self:
             if not this.active:
                 continue
-            connection = this.server_id.connect()
+            connection = this.server_id._connect__()
             connection.select()
             if connection.select(this.path)[0] != "OK":
                 raise ValidationError(_("Invalid folder %s!") % this.path)
@@ -169,7 +169,7 @@ class FetchmailServerFolder(models.Model):
             connection = None
             try:
                 # New connection per folder
-                connection = this.server_id.connect()
+                connection = this.server_id._connect__()
                 this.check_imap_archive_folder(connection)
                 this.retrieve_imap_folder(connection)
                 connection.close()

@@ -67,7 +67,7 @@ class TestAttachMailManually(TransactionCase):
         raw_message = b"Raw MIME message here"
         return mail_message, raw_message
 
-    @patch.object(FetchmailServer, "connect")
+    @patch.object(FetchmailServer, "_connect__")
     def test_default_get_populates_mail_ids(self, mock_connect):
         """Test that default_get loads emails into wizard."""
         mock_conn = self._mock_connection()
@@ -85,7 +85,7 @@ class TestAttachMailManually(TransactionCase):
             self.assertEqual(len(wizard.mail_ids), 1)
             self.assertEqual(wizard.mail_ids[0].subject, "Test")
 
-    @patch.object(FetchmailServer, "connect")
+    @patch.object(FetchmailServer, "_connect__")
     def test_attach_mails_only_with_object_id(self, mock_connect):
         """Only mails with object_id should be attached."""
         mock_conn = self._mock_connection()
@@ -159,7 +159,7 @@ class TestAttachMailManually(TransactionCase):
     def test_wizard_name_is_translated(self):
         """Test that default name is translated."""
         with (
-            patch.object(FetchmailServer, "connect", return_value=MagicMock()),
+            patch.object(FetchmailServer, "_connect__", return_value=MagicMock()),
             patch.object(self.folder.__class__, "fetch_msg", return_value=({}, b"raw")),
             patch.object(
                 self.folder.__class__, "get_message_uids", return_value=[b"1"]
@@ -172,7 +172,7 @@ class TestAttachMailManually(TransactionCase):
     def test_compute_folders_available_success(self):
         """You must return the available folders."""
         with patch.object(
-            self.server.__class__, "connect", return_value=self._mock_connection()
+            self.server.__class__, "_connect__", return_value=self._mock_connection()
         ):
             result = self.server.folders_available
             self.assertEqual(result, "INBOX\nSent")
@@ -187,6 +187,6 @@ class TestAttachMailManually(TransactionCase):
         """If list() fails, it should display an error message."""
         mock_conn = MagicMock()
         mock_conn.list.return_value = ("NO", [])
-        with patch.object(self.server.__class__, "connect", return_value=mock_conn):
+        with patch.object(self.server.__class__, "_connect__", return_value=mock_conn):
             result = self.server.folders_available
             self.assertEqual(result, "Unable to retrieve folders.")

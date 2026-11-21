@@ -32,7 +32,7 @@ class FetchmailServer(models.Model):
                 this.folders_available = _("Confirm connection first.")
                 continue
             try:
-                connection = this.connect()
+                connection = this._connect__()
             except UserError:
                 this.folders_available = _("Confirm connection first.")
                 continue

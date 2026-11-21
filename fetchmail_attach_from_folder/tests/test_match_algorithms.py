@@ -229,7 +229,7 @@ class TestMatchAlgorithms(TransactionCase):
         """Test the button_confirm_folder method."""
         folder = self.folder
         with patch.object(
-            self.server.__class__, "connect", return_value=MockConnection()
+            self.server.__class__, "_connect__", return_value=MockConnection()
         ):
             folder.active = False
             folder.button_confirm_folder()
