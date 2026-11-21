@@ -41,7 +41,6 @@ class AttachMailManually(models.TransientModel):
         defaults["folder_id"] = folder_id
         folder = folder_model.browse([folder_id])
         connection = folder.server_id._connect__()
-        connection.select(folder.path)
         criteria = "FLAGGED" if folder.flag_nonmatching else folder.get_criteria()
         message_uids = folder.get_message_uids(connection, criteria)
         for message_uid in message_uids[0].split():
@@ -57,7 +56,7 @@ class AttachMailManually(models.TransientModel):
         folder = self.folder_id
         server = folder.server_id
         connection = server._connect__()
-        connection.select(folder.path)
+        folder._select_folder(connection)
         for mail in self.mail_ids:
             if not mail.object_id:
                 continue

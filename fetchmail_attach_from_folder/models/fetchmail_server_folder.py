@@ -137,11 +137,30 @@ class FetchmailServerFolder(models.Model):
             if not this.active:
                 continue
             connection = this.server_id._connect__()
-            connection.select()
-            if connection.select(this.path)[0] != "OK":
+            if this._select_folder(connection)[0] != "OK":
                 raise ValidationError(_("Invalid folder %s!") % this.path)
             connection.close()
             this.write({"state": "done"})
+
+    def _writes_to_mailbox(self):
+        """Whether pulling this folder changes the mailbox: marks, flags, deletes, archives."""
+        self.ensure_one()
+        return bool(
+            self.seen != "none"
+            or self.flag_nonmatching
+            or self.delete_matching
+            or self.archive_path
+        )
+
+    def _select_folder(self, connection):
+        """Open the folder, read-only when pulling it changes nothing.
+
+        A folder opened for writing is closed with CLOSE, which deletes the mail its
+        owner marked as deleted. A folder opened read-only has nothing to delete, and
+        the server will not change a flag in it either.
+        """
+        self.ensure_one()
+        return connection.select(self.path, readonly=not self._writes_to_mailbox())
 
     def button_attach_mail_manually(self):
         self.ensure_one()
@@ -241,7 +260,7 @@ class FetchmailServerFolder(models.Model):
             "start checking for emails in folder %(folder)s on server %(server)s",
             {"folder": self.path, "server": server.name},
         )
-        if connection.select(self.path)[0] != "OK":
+        if self._select_folder(connection)[0] != "OK":
             raise UserError(
                 _("Could not open folder %(folder)s on server %(server)s")
                 % {"folder": self.path, "server": server.name}
