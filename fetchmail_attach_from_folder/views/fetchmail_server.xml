@@ -8,12 +8,12 @@
             <field name="object_id" position="attributes">
                 <attribute
                     name="required"
-                >server_type not in ('imap', 'outlook')</attribute>
+                >server_type not in ('imap', 'gmail', 'outlook')</attribute>
             </field>
             <xpath expr="//notebook" position="inside">
                 <page
                     string="Folders to monitor"
-                    invisible="server_type not in ('imap', 'outlook')"
+                    invisible="server_type not in ('imap', 'gmail', 'outlook')"
                 >
                     <group>
                         <field name="folders_only" />
