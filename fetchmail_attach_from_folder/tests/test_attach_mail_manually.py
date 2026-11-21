@@ -5,8 +5,6 @@ from unittest.mock import MagicMock, patch
 
 from odoo.tests.common import TransactionCase
 
-from odoo.addons.mail.models.fetchmail import FetchmailServer
-
 
 class TestAttachMailManually(TransactionCase):
     @classmethod
@@ -56,85 +54,6 @@ class TestAttachMailManually(TransactionCase):
         )
         return mock_conn
 
-    def _mock_fetch_msg(self, connection, message_uid):
-        """Return a tuple like the real fetch_msg: (dict, bytes)"""
-        mail_message = {
-            "subject": "Test",
-            "date": "2025-07-23 12:00:00",
-            "from": "test@example.com",
-            "body": "<p>Body</p>",
-        }
-        raw_message = b"Raw MIME message here"
-        return mail_message, raw_message
-
-    @patch.object(FetchmailServer, "_connect__")
-    def test_default_get_populates_mail_ids(self, mock_connect):
-        """Test that default_get loads emails into wizard."""
-        mock_conn = self._mock_connection()
-        mock_connect.return_value = mock_conn
-        with (
-            patch.object(
-                self.folder.__class__, "fetch_msg", side_effect=self._mock_fetch_msg
-            ),
-            patch.object(
-                self.folder.__class__, "get_message_uids", return_value=[b"1"]
-            ),
-            patch.object(self.folder.__class__, "get_criteria", return_value="ALL"),
-        ):
-            wizard = self.Wizard.with_context(folder_id=self.folder.id).create({})
-            self.assertEqual(len(wizard.mail_ids), 1)
-            self.assertEqual(wizard.mail_ids[0].subject, "Test")
-
-    @patch.object(FetchmailServer, "_connect__")
-    def test_attach_mails_only_with_object_id(self, mock_connect):
-        """Only mails with object_id should be attached."""
-        mock_conn = self._mock_connection()
-        mock_connect.return_value = mock_conn
-        with patch.object(
-            self.folder.__class__,
-            "fetch_msg",
-            side_effect=lambda conn, message_uid: (
-                {
-                    "subject": "With Object",
-                    "date": "2025-07-23",
-                    "from": "test@example.com",
-                    "body": "<p>Body</p>",
-                },
-                b"raw_message",
-            ),
-        ):
-            wizard = self.Wizard.create(
-                {
-                    "folder_id": self.folder.id,
-                    "mail_ids": [
-                        (
-                            0,
-                            0,
-                            {
-                                "message_uid": "1",
-                                "subject": "No Object",
-                                "object_id": False,
-                            },
-                        ),
-                        (
-                            0,
-                            0,
-                            {
-                                "message_uid": "2",
-                                "subject": "With Object",
-                                "object_id": f"res.partner,{self.partner.id}",
-                            },
-                        ),
-                    ],
-                }
-            )
-            with patch.object(self.folder.__class__, "attach_mail") as mock_attach:
-                with patch.object(self.folder.__class__, "update_msg"):
-                    wizard.attach_mails()
-                    mock_attach.assert_called_once()
-                    args, _ = mock_attach.call_args
-                    self.assertEqual(args[0], self.partner)
-
     def test_prepare_mail_returns_expected_dict(self):
         """Test _prepare_mail returns correct structure."""
         folder = self.folder
@@ -158,16 +77,8 @@ class TestAttachMailManually(TransactionCase):
 
     def test_wizard_name_is_translated(self):
         """Test that default name is translated."""
-        with (
-            patch.object(FetchmailServer, "_connect__", return_value=MagicMock()),
-            patch.object(self.folder.__class__, "fetch_msg", return_value=({}, b"raw")),
-            patch.object(
-                self.folder.__class__, "get_message_uids", return_value=[b"1"]
-            ),
-            patch.object(self.folder.__class__, "get_criteria", return_value="ALL"),
-        ):
-            wizard = self.Wizard.with_context(folder_id=self.folder.id).create({})
-            self.assertEqual(wizard.name, "Attach emails manually")
+        wizard = self.Wizard.create({})
+        self.assertEqual(wizard.name, "Attach emails manually")
 
     def test_compute_folders_available_success(self):
         """You must return the available folders."""

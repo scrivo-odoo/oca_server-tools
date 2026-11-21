@@ -39,12 +39,16 @@ class AttachMailManually(models.TransientModel):
         folder_model = self.env["fetchmail.server.folder"]
         folder_id = self.env.context.get("folder_id")
         defaults["folder_id"] = folder_id
-        folder = folder_model.browse([folder_id])
+        if not folder_id:
+            return defaults
+        folder = folder_model.browse(folder_id)
         connection = folder.server_id._connect__()
         criteria = "FLAGGED" if folder.flag_nonmatching else folder.get_criteria()
         message_uids = folder.get_message_uids(connection, criteria)
         for message_uid in message_uids[0].split():
-            mail_message, message_org = folder.fetch_msg(connection, message_uid)
+            mail_message = folder._get_message_dict(
+                folder.fetch_msg(connection, message_uid)
+            )
             defaults["mail_ids"].append(
                 (0, 0, self._prepare_mail(folder, message_uid, mail_message))
             )
@@ -61,32 +65,15 @@ class AttachMailManually(models.TransientModel):
             if not mail.object_id:
                 continue
             message_uid = mail.message_uid
-            mail_message, message_org = folder.fetch_msg(connection, message_uid)
+            mail_message = folder._get_message_dict(
+                folder.fetch_msg(connection, message_uid)
+            )
             folder.attach_mail(mail.object_id, mail_message)
             folder.update_msg(
                 connection, message_uid, matched=True, flagged=folder.flag_nonmatching
             )
         connection.close()
         return {"type": "ir.actions.act_window_close"}
-
-    @api.model
-    def fields_view_get(
-        self, view_id=None, view_type="form", toolbar=False, submenu=False
-    ):
-        # TODO: Change or replace this...
-        result = super().fields_view_get(
-            view_id=view_id, view_type=view_type, toolbar=toolbar, submenu=submenu
-        )
-        if view_type != "form":
-            return result
-        folder_model = self.env["fetchmail.server.folder"]
-        folder_id = self.env.context.get("folder_id")
-        folder = folder_model.browse([folder_id])
-        form = result["fields"]["mail_ids"]["views"]["form"]
-        form["fields"]["object_id"]["selection"] = [
-            (folder.model_id.model, folder.model_id.name)
-        ]
-        return result
 
 
 class AttachMailManuallyMail(models.TransientModel):
