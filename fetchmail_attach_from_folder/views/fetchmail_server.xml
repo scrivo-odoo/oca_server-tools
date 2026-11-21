@@ -82,18 +82,18 @@
                                         <field name="match_algorithm" />
                                     </group>
                                     <group
-                                        attrs="{'invisible': [('match_algorithm','=','odoo_standard')]}"
+                                        invisible="match_algorithm == 'odoo_standard'"
                                         colspan="2"
                                     >
                                         <field
                                             name="model_field"
                                             placeholder="email"
-                                            attrs="{'required': [('match_algorithm','in',['email_exact','email_domain'])]}"
+                                            required="match_algorithm in ('email_exact', 'email_domain')"
                                         />
                                         <field
                                             name="mail_field"
                                             placeholder="to,from"
-                                            attrs="{'required': [('match_algorithm','in',['email_exact','email_domain'])]}"
+                                            required="match_algorithm in ('email_exact', 'email_domain')"
                                         />
                                         <field
                                             name="domain"
@@ -103,8 +103,8 @@
                                         <field
                                             name="model_order"
                                             placeholder="name asc"
-                                            attrs="{'readonly': [('match_first','==',False)],
-                                                    'required': [('match_first','==',True)]}"
+                                            readonly="not match_first"
+                                            required="match_first"
                                         />
                                     </group>
                                 </group>
