@@ -39,5 +39,18 @@ without being marked as seen, flagged, moved or deleted, and mail that its
 owner marked as deleted stays where it is. Any other setting writes to the
 mailbox as it says, and the folder is then opened for writing.
 
+A folder that is not read again and again
+-----------------------------------------
+
+A folder that changes nothing in the mailbox has no mark that tells a pull which
+mail is new, so every pull reads the whole folder, downloads every mail and drops
+the ones that are attached already. Check `Fetch New Mail Only` on the folder to
+read only what came after the last pull: the folder remembers the last UID it
+looked at (`Last UID`) with the `UIDVALIDITY` the server gave (`UIDVALIDITY`) and
+asks the server for the UIDs above it. When the server gives another
+`UIDVALIDITY`, the UIDs mean other mail, and the folder is read as usual once;
+mail that is attached already is not attached twice. The option is off by
+default, and `Attach Mail Manually` does not use it.
+
 The scheduled action `Mail: Fetchmail Service` pulls the folders of every
 confirmed server, and so does `Fetch Now` on the server.

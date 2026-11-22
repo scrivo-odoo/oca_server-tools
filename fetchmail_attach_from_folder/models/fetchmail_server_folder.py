@@ -119,6 +119,30 @@ class FetchmailServerFolder(models.Model):
         "option to only fetch emails received in the last 24 hours. This helps "
         "avoid reprocessing emails if they are not deleted after processing.",
     )
+    fetch_new_uids_only = fields.Boolean(
+        string="Fetch New Mail Only",
+        help="By default every pull reads the whole folder again, and the mail it "
+        "already took is dropped after it was downloaded. Enable this option to "
+        "remember the last UID the folder looked at and ask the server only for "
+        "what came after it. Meant for a folder that does not mark, flag, delete "
+        "or archive the mail (where nothing else tells a pull what is new).",
+    )
+    last_uid = fields.Integer(
+        string="Last UID",
+        readonly=True,
+        copy=False,
+        help="The highest UID of the folder that a pull has looked at. Used with "
+        "'Fetch New Mail Only'.",
+    )
+    uid_validity = fields.Char(
+        string="UIDVALIDITY",
+        readonly=True,
+        copy=False,
+        help="The UIDVALIDITY of the folder when the last UID was taken. A text, "
+        "because the server's number is 32 bits unsigned. When the server answers "
+        "another value, its UIDs mean other mail and the folder is read from its "
+        "start.",
+    )
     seen = fields.Selection(
         selection=[
             ("on_fetch", "Immediately on Fetch"),
@@ -231,11 +255,55 @@ class FetchmailServerFolder(models.Model):
             criteria = f"SINCE {yesterday} {criteria}"
         return criteria
 
-    def retrieve_imap_folder(self, connection):
-        """Retrieve all mails for one IMAP folder."""
+    def _uid_validity(self, connection):
+        """The UIDVALIDITY of the folder as text, or False when none is given.
+
+        It comes with the answer to SELECT (imaplib keeps it among the mandated
+        responses). Text, because the number is 32 bits unsigned.
+        """
         self.ensure_one()
-        message_uids = self.get_message_uids(connection, self.get_criteria())
-        for message_uid in message_uids[0].split():
+        if self._select_folder(connection)[0] != "OK":
+            raise UserError(
+                _("Could not open folder %(folder)s on server %(server)s")
+                % {"folder": self.path, "server": self.server_id.name}
+            )
+        _typ, data = connection.response("UIDVALIDITY")
+        return data[0].decode() if data and data[0] else False
+
+    def _remember_uids(self, uid_validity, was_new, message_uids):
+        """Keep the highest UID that this pull looked at, with its UIDVALIDITY."""
+        self.ensure_one()
+        if not uid_validity:
+            return
+        highest = max(
+            [int(uid) for uid in message_uids] + [self.last_uid if was_new else 0]
+        )
+        if (highest, uid_validity) != (self.last_uid, self.uid_validity):
+            self.write({"last_uid": highest, "uid_validity": uid_validity})
+
+    def retrieve_imap_folder(self, connection):
+        """Retrieve all mails for one IMAP folder.
+
+        With "Fetch New Mail Only" the folder asks the server for the UIDs after the
+        last one it looked at, while the UIDVALIDITY of the folder is the one it
+        remembers; any other value, or none remembered, reads the folder as usual.
+        """
+        self.ensure_one()
+        criteria = self.get_criteria()
+        uid_validity = was_new = False
+        if self.fetch_new_uids_only:
+            uid_validity = self._uid_validity(connection)
+            was_new = bool(
+                uid_validity and uid_validity == self.uid_validity and self.last_uid
+            )
+            if was_new:
+                criteria = f"UID {self.last_uid + 1}:* {criteria}"
+        message_uids = self.get_message_uids(connection, criteria)
+        uids = message_uids[0].split()
+        if was_new:
+            # the server answers "n:*" with the last mail when nothing is newer than n
+            uids = [uid for uid in uids if int(uid) > self.last_uid]
+        for message_uid in uids:
             # We will accept exceptions for single messages
             try:
                 self.env.cr.execute("savepoint apply_matching")
@@ -247,6 +315,8 @@ class FetchmailServerFolder(models.Model):
                     "Failed to fetch mail %(message_uid)s from server %(server)s",
                     {"message_uid": message_uid, "server": self.server_id.name},
                 )
+        if self.fetch_new_uids_only:
+            self._remember_uids(uid_validity, was_new, uids)
 
     def get_message_uids(self, connection, criteria):
         """Return imap ids of messages to process"""

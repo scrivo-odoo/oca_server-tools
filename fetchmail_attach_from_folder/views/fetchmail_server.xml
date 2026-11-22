@@ -67,6 +67,15 @@
                                     <field name="path" placeholder="INBOX.subfolder1" />
                                     <field name="fetch_unseen_only" />
                                     <field name="fetch_last_day_only" />
+                                    <field name="fetch_new_uids_only" />
+                                    <field
+                                        name="last_uid"
+                                        invisible="not fetch_new_uids_only"
+                                    />
+                                    <field
+                                        name="uid_validity"
+                                        invisible="not fetch_new_uids_only"
+                                    />
                                 </group>
 
                                 <!-- Matching Options -->
