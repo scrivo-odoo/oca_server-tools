@@ -123,16 +123,20 @@ class FetchmailServerFolder(models.Model):
         string="Fetch New Mail Only",
         help="By default every pull reads the whole folder again, and the mail it "
         "already took is dropped after it was downloaded. Enable this option to "
-        "remember the last UID the folder looked at and ask the server only for "
-        "what came after it. Meant for a folder that does not mark, flag, delete "
-        "or archive the mail (where nothing else tells a pull what is new).",
+        "remember where the unbroken run of mail taken by the pulls ends and ask "
+        "the server only for what came after it. A mail that fails stops that run "
+        "before it, and is read again by the next pull. Meant for a folder that "
+        "does not mark, flag, delete or archive the mail (where nothing else tells "
+        "a pull what is new).",
     )
     last_uid = fields.Char(
         string="Last UID",
         readonly=True,
         copy=False,
-        help="The highest UID of the folder that a pull has looked at. Used with "
-        "'Fetch New Mail Only'.",
+        help="The UID where the unbroken run of mail taken by the pulls ends: "
+        "every mail up to it was taken, and the next pull asks for the ones after "
+        "it. It stays before a mail that failed. Used with 'Fetch New Mail Only'. "
+        "A text, because a UID is 32 bits unsigned.",
     )
     uid_validity = fields.Char(
         string="UIDVALIDITY",
