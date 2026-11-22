@@ -270,13 +270,19 @@ class FetchmailServerFolder(models.Model):
         _typ, data = connection.response("UIDVALIDITY")
         return data[0].decode() if data and data[0] else False
 
-    def _remember_uids(self, uid_validity, was_new, message_uids):
-        """Keep the highest UID that this pull looked at, with its UIDVALIDITY."""
+    def _remember_uids(self, uid_validity, was_new, done_uids):
+        """Keep the end of the unbroken run of mail this pull took, and UIDVALIDITY.
+
+        `done_uids` are the UIDs, in order, up to the first mail that failed: the
+        cursor never moves past a mail that was not taken, so the next pull reads it
+        again (the mail after it that was taken is read again too and is not attached
+        twice, `_check_message_already_present`).
+        """
         self.ensure_one()
         if not uid_validity:
             return
         highest = max(
-            [int(uid) for uid in message_uids] + [self.last_uid if was_new else 0]
+            [int(uid) for uid in done_uids] + [self.last_uid if was_new else 0]
         )
         if (highest, uid_validity) != (self.last_uid, self.uid_validity):
             self.write({"last_uid": highest, "uid_validity": uid_validity})
@@ -300,23 +306,30 @@ class FetchmailServerFolder(models.Model):
                 criteria = f"UID {self.last_uid + 1}:* {criteria}"
         message_uids = self.get_message_uids(connection, criteria)
         uids = message_uids[0].split()
+        if self.fetch_new_uids_only:
+            uids = sorted(uids, key=int)
         if was_new:
             # the server answers "n:*" with the last mail when nothing is newer than n
             uids = [uid for uid in uids if int(uid) > self.last_uid]
+        done_uids = []  # the unbroken run of mail taken, up to the first that failed
+        failed = False
         for message_uid in uids:
             # We will accept exceptions for single messages
             try:
                 self.env.cr.execute("savepoint apply_matching")
                 self.apply_matching(connection, message_uid)
                 self.env.cr.execute("release savepoint apply_matching")
+                if not failed:
+                    done_uids.append(message_uid)
             except Exception:
                 self.env.cr.execute("rollback to savepoint apply_matching")
+                failed = True
                 _logger.exception(
                     "Failed to fetch mail %(message_uid)s from server %(server)s",
                     {"message_uid": message_uid, "server": self.server_id.name},
                 )
         if self.fetch_new_uids_only:
-            self._remember_uids(uid_validity, was_new, uids)
+            self._remember_uids(uid_validity, was_new, done_uids)
 
     def get_message_uids(self, connection, criteria):
         """Return imap ids of messages to process"""

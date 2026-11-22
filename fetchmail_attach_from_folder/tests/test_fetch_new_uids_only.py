@@ -1,6 +1,8 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 import imaplib
 
+from odoo.tools import mute_logger
+
 from .common import FOLDER, ImapCase, raw_mail
 
 
@@ -119,3 +121,36 @@ class TestFetchNewUidsOnly(ImapCase):
         finally:
             connection.logout()
         self.assertEqual(uids[0].split(), [b"1", b"2"])
+
+    def test_a_mail_that_failed_is_read_again_and_the_cursor_stops_before_it(self):
+        """The mail of UID 2 fails in the middle of a pull; the ones after it pass."""
+        folder = self._folder()
+        for suffix in ("d", "e"):  # UIDs 4 and 5, from the payer
+            mail = raw_mail(
+                self.payer.email, f"Invoice {suffix}", f"{self.token}-{suffix}"
+            )
+            self.mailbox.put(FOLDER, mail)
+        fail = {"on": True}
+        original = type(folder).apply_matching
+
+        def apply_matching(this, connection, message_uid):
+            if fail["on"] and message_uid == b"2":
+                raise ValueError("a mail that cannot be processed")
+            return original(this, connection, message_uid)
+
+        self.patch(type(folder), "apply_matching", apply_matching)
+        logger = (
+            "odoo.addons.fetchmail_attach_from_folder.models.fetchmail_server_folder"
+        )
+        with mute_logger(logger):
+            self.assertEqual(self._pull(folder), ["1", "4", "5"])
+        # the cursor stops after the last mail before the failed one
+        self.assertEqual(folder.last_uid, 1)
+        fail["on"] = False
+        # the failed mail is read again, the one before it is not, and the ones
+        # after it that were attached already are read but not attached twice
+        self.assertEqual(self._pull(folder), ["2", "4", "5"])
+        self.assertEqual(folder.last_uid, 5)
+        for suffix in ("a", "d", "e"):
+            self.assertEqual(len(self.attached(suffix)), 1, suffix)
+        self.assertEqual(self._pull(folder), [])
