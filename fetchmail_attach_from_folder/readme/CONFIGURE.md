@@ -45,12 +45,16 @@ A folder that is not read again and again
 A folder that changes nothing in the mailbox has no mark that tells a pull which
 mail is new, so every pull reads the whole folder, downloads every mail and drops
 the ones that are attached already. Check `Fetch New Mail Only` on the folder to
-read only what came after the last pull: the folder remembers the last UID it
-looked at (`Last UID`) with the `UIDVALIDITY` the server gave (`UIDVALIDITY`) and
-asks the server for the UIDs above it. When the server gives another
-`UIDVALIDITY`, the UIDs mean other mail, and the folder is read as usual once;
-mail that is attached already is not attached twice. The option is off by
-default, and `Attach Mail Manually` does not use it.
+read only what came after the last pull: the folder remembers the UID where the
+unbroken run of mail it took ends (`Last UID`) with the `UIDVALIDITY` the server
+gave (`UIDVALIDITY`) and asks the server for the UIDs above it. When the server
+gives another `UIDVALIDITY`, the UIDs mean other mail, and the folder is read as
+usual once; mail that is attached already is not attached twice. A mail that
+fails stops the run before it and is read again by the next pull. A mail that
+always fails therefore holds the cursor, and the folder is read from that mail
+on every pull, the mail after it too (it is not attached twice) until the mail is
+dealt with: removed from the folder, or the cause of its failure removed. The
+option is off by default, and `Attach Mail Manually` does not use it.
 
 The scheduled action `Mail: Fetchmail Service` pulls the folders of every
 confirmed server, and so does `Fetch Now` on the server.
