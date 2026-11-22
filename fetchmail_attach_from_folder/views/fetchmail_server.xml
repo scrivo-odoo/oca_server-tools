@@ -89,6 +89,11 @@
                                             nolabel="0"
                                         />
                                         <field name="match_algorithm" />
+                                        <field
+                                            name="custom_values"
+                                            placeholder="{'move_type': 'in_invoice'}"
+                                            invisible="match_algorithm != 'odoo_standard'"
+                                        />
                                     </group>
                                     <group
                                         invisible="match_algorithm == 'odoo_standard'"

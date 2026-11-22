@@ -1,5 +1,6 @@
 # Copyright - 2013-2026 Therp BV <https://therp.nl>.
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+import ast
 import email
 import email.policy
 import logging
@@ -69,6 +70,11 @@ class FetchmailServerFolder(models.Model):
         required=True,
         string="Matching Algorithm",
         help="Select the algorithm used to determine which object an email matches.",
+    )
+    custom_values = fields.Text(
+        help='Values for the record that "Odoo Standard" makes from a mail, as a '
+        "Python dictionary of field names and values, for example "
+        "{'move_type': 'in_invoice'}. Left empty, the model's own defaults apply.",
     )
     mail_field = fields.Char(
         string="Email Field",
@@ -158,6 +164,36 @@ class FetchmailServerFolder(models.Model):
         required=True,
         default="on_fetch",
     )
+
+    @api.constrains("custom_values")
+    def _check_custom_values(self):
+        for this in self:
+            this._get_custom_values()
+
+    def _get_custom_values(self):
+        """The dictionary that `custom_values` holds, or None when it is empty.
+
+        Only a literal is read (`ast.literal_eval`), never run.
+        """
+        self.ensure_one()
+        if not (self.custom_values or "").strip():
+            return None
+        try:
+            values = ast.literal_eval(self.custom_values.strip())
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            values = None
+        if not isinstance(values, dict) or not all(
+            isinstance(key, str) for key in values
+        ):
+            raise ValidationError(
+                _(
+                    "Custom Values of folder %(folder)s must be a Python dictionary "
+                    "of field names and values, for example "
+                    "{'move_type': 'in_invoice'}.",
+                    folder=self.path,
+                )
+            )
+        return values
 
     def button_confirm_folder(self):
         self.write({"state": "draft"})
@@ -375,6 +411,7 @@ class FetchmailServerFolder(models.Model):
             thread_id = thread_model.message_process(
                 self.model_id.model,
                 message_org,
+                custom_values=self._get_custom_values(),
                 save_original=self.server_id.original,
                 strip_attachments=(not self.server_id.attach),
             )

@@ -94,7 +94,7 @@ class TestFetchNewUidsOnly(ImapCase):
         self.assertEqual(folder.last_uid, "2")
 
     def test_a_uid_above_the_signed_32_bit_range_is_kept_and_asked_for(self):
-        """A UID is 32 bits unsigned: a folder at UID 2**32 - 2 keeps it and pulls on."""
+        """A UID is 32 bits unsigned: a folder at UID 2**32 - 2 keeps it, pulls on."""
         folder = self._folder()
         self._pull(folder)
         highest = str(2**32 - 2)

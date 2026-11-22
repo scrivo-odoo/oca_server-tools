@@ -27,6 +27,13 @@ Odoo standard
 This is stricly speaking no matching algorithm, but calls the model's standard
 action on new incoming mail, which is usually creating a new record.
 
+`Custom Values` sets what that record gets: a Python dictionary of field names
+and values, for example `{'move_type': 'in_invoice'}` on a folder whose target
+model is `Journal Entry`, so that the mail becomes a vendor bill and not a journal
+entry. It is read as a literal and never run; text that is no dictionary is
+refused when the folder is saved. Left empty, the model's own defaults apply.
+Other algorithms do not create a record and do not use it.
+
 A folder that changes nothing in the mailbox
 --------------------------------------------
 
