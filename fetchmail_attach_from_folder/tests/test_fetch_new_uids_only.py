@@ -45,7 +45,7 @@ class TestFetchNewUidsOnly(ImapCase):
         folder = self._folder()
         before = self.mailbox.state()
         self.assertEqual(self._pull(folder), ["1", "2"])
-        self.assertEqual(folder.last_uid, 2)
+        self.assertEqual(folder.last_uid, "2")
         self.assertEqual(folder.uid_validity, before[FOLDER][0])
         self.assertEqual(self._pull(folder), [])
         self.assertEqual(self._pull(folder), [])
@@ -58,7 +58,7 @@ class TestFetchNewUidsOnly(ImapCase):
         mail = raw_mail(self.payer.email, "Invoice 2", f"{self.token}-d")
         self.mailbox.put(FOLDER, mail)
         self.assertEqual(self._pull(folder), ["4"])
-        self.assertEqual(folder.last_uid, 4)
+        self.assertEqual(folder.last_uid, "4")
         self.assertEqual(self.attached("d").res_id, self.payer.id)
 
     def test_the_last_mail_that_the_range_returns_is_not_fetched_again(self):
@@ -69,7 +69,7 @@ class TestFetchNewUidsOnly(ImapCase):
         self.mailbox.put(FOLDER, mail)
         self._pull(folder)
         self.assertEqual(self._pull(folder), [])
-        self.assertEqual(folder.last_uid, 4)
+        self.assertEqual(folder.last_uid, "4")
 
     def test_a_folder_made_again_is_read_from_its_start_without_doubles(self):
         folder = self._folder()
@@ -91,7 +91,19 @@ class TestFetchNewUidsOnly(ImapCase):
         self.assertEqual(self.attached("e").res_id, self.payer.id)
         self.assertEqual(len(self.attached("a")), 1)
         self.assertEqual(folder.uid_validity, self.mailbox.state()[FOLDER][0])
-        self.assertEqual(folder.last_uid, 2)
+        self.assertEqual(folder.last_uid, "2")
+
+    def test_a_uid_above_the_signed_32_bit_range_is_kept_and_asked_for(self):
+        """A UID is 32 bits unsigned: a folder at UID 2**32 - 2 keeps it and pulls on."""
+        folder = self._folder()
+        self._pull(folder)
+        highest = str(2**32 - 2)
+        folder.write({"last_uid": highest})
+        folder.invalidate_recordset()
+        self.assertEqual(int(folder.last_uid), 2**32 - 2)
+        # the server answers "UID 4294967295:*" with its last mail, below the cursor
+        self.assertEqual(self._pull(folder), [])
+        self.assertEqual(int(folder.last_uid), 2**32 - 2)
 
     def test_without_the_flag_every_pull_reads_the_whole_folder(self):
         """The other side: a folder as it was in 18.0 is not changed by the fields."""
@@ -99,7 +111,7 @@ class TestFetchNewUidsOnly(ImapCase):
         self.assertEqual(self._pull(folder), ["1", "2"])
         self.assertEqual(self._pull(folder), ["1", "2"])
         self.assertFalse(folder.fetch_new_uids_only)
-        self.assertEqual(folder.last_uid, 0)
+        self.assertFalse(folder.last_uid)
         self.assertFalse(folder.uid_validity)
 
     def test_a_folder_that_marks_mail_is_searched_by_uid_too(self):
@@ -114,7 +126,7 @@ class TestFetchNewUidsOnly(ImapCase):
         """The memory belongs to the pull; the wizard does not use it."""
         folder = self._folder()
         self._pull(folder)
-        self.assertEqual(folder.last_uid, 2)
+        self.assertEqual(folder.last_uid, "2")
         connection = folder.server_id._connect__()
         try:
             uids = folder.get_message_uids(connection, folder.get_criteria())
@@ -145,12 +157,12 @@ class TestFetchNewUidsOnly(ImapCase):
         with mute_logger(logger):
             self.assertEqual(self._pull(folder), ["1", "4", "5"])
         # the cursor stops after the last mail before the failed one
-        self.assertEqual(folder.last_uid, 1)
+        self.assertEqual(folder.last_uid, "1")
         fail["on"] = False
         # the failed mail is read again, the one before it is not, and the ones
         # after it that were attached already are read but not attached twice
         self.assertEqual(self._pull(folder), ["2", "4", "5"])
-        self.assertEqual(folder.last_uid, 5)
+        self.assertEqual(folder.last_uid, "5")
         for suffix in ("a", "d", "e"):
             self.assertEqual(len(self.attached(suffix)), 1, suffix)
         self.assertEqual(self._pull(folder), [])

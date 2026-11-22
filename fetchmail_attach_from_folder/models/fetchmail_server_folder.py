@@ -127,7 +127,7 @@ class FetchmailServerFolder(models.Model):
         "what came after it. Meant for a folder that does not mark, flag, delete "
         "or archive the mail (where nothing else tells a pull what is new).",
     )
-    last_uid = fields.Integer(
+    last_uid = fields.Char(
         string="Last UID",
         readonly=True,
         copy=False,
@@ -282,10 +282,10 @@ class FetchmailServerFolder(models.Model):
         if not uid_validity:
             return
         highest = max(
-            [int(uid) for uid in done_uids] + [self.last_uid if was_new else 0]
+            [int(uid) for uid in done_uids] + [int(self.last_uid) if was_new else 0]
         )
-        if (highest, uid_validity) != (self.last_uid, self.uid_validity):
-            self.write({"last_uid": highest, "uid_validity": uid_validity})
+        if (str(highest), uid_validity) != (self.last_uid, self.uid_validity):
+            self.write({"last_uid": str(highest), "uid_validity": uid_validity})
 
     def retrieve_imap_folder(self, connection):
         """Retrieve all mails for one IMAP folder.
@@ -303,14 +303,14 @@ class FetchmailServerFolder(models.Model):
                 uid_validity and uid_validity == self.uid_validity and self.last_uid
             )
             if was_new:
-                criteria = f"UID {self.last_uid + 1}:* {criteria}"
+                criteria = f"UID {int(self.last_uid) + 1}:* {criteria}"
         message_uids = self.get_message_uids(connection, criteria)
         uids = message_uids[0].split()
         if self.fetch_new_uids_only:
             uids = sorted(uids, key=int)
         if was_new:
             # the server answers "n:*" with the last mail when nothing is newer than n
-            uids = [uid for uid in uids if int(uid) > self.last_uid]
+            uids = [uid for uid in uids if int(uid) > int(self.last_uid)]
         done_uids = []  # the unbroken run of mail taken, up to the first that failed
         failed = False
         for message_uid in uids:
