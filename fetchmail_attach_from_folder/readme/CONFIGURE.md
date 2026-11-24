@@ -34,6 +34,11 @@ entry. It is read as a literal and never run; text that is no dictionary is
 refused when the folder is saved. Left empty, the model's own defaults apply.
 Other algorithms do not create a record and do not use it.
 
+The record is made by the scheduled fetch action, not by the user who edited the
+folder, and the values are applied as that action does. For this reason the field
+is for administrators only: folders can be edited by the users of the group
+`base.group_system` and by no one else.
+
 A folder that changes nothing in the mailbox
 --------------------------------------------
 
