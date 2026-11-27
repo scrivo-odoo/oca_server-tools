@@ -1,6 +1,7 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 import imaplib
 
+from odoo import fields
 from odoo.exceptions import UserError
 from odoo.tools import mute_logger
 
@@ -99,9 +100,13 @@ class TestFetchNewUidsOnly(ImapCase):
         """The UIDs it remembers mean other mail now: reading the whole folder would take
         every mail in it for new."""
         folder = self._folder()
+        self.assertFalse(folder.uid_validity_stopped_at)
         old_validity, old_last = self._made_again(folder)
+        self.assertFalse(folder.uid_validity_stopped_at, "stopped before it was")
         with mute_logger(FOLDER_LOGGER):
             self.assertEqual(self._pull(folder), [])
+        self.assertTrue(folder.uid_validity_stopped_at, "the stop has no date")
+        self.assertLessEqual(folder.uid_validity_stopped_at, fields.Datetime.now())
         self.assertEqual(folder.state, "draft")
         self.assertEqual((folder.uid_validity, folder.last_uid), (old_validity, old_last))
         self.assertFalse(self.attached("e"))

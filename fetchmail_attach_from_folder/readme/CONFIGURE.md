@@ -61,8 +61,9 @@ read only what came after the last pull: the folder remembers the UID where the
 unbroken run of mail it took ends (`Last UID`) with the `UIDVALIDITY` the server
 gave (`UIDVALIDITY`) and asks the server for the UIDs above it. When the server
 gives another `UIDVALIDITY` (or none) than the folder remembers, the UIDs mean
-other mail: the folder is not read, it goes back to draft and the pull says why
-in the log; reading it as usual would take every mail in it for new. The first
+other mail: the folder is not read, it goes back to draft, the moment is kept
+(`Stopped at`) and the pull says why in the log; reading it as usual would take
+every mail in it for new. The first
 pull, with nothing remembered yet, reads the folder as usual. A mail that
 fails stops the run before it and is read again by the next pull. A mail that
 always fails therefore holds the cursor, and the folder is read from that mail

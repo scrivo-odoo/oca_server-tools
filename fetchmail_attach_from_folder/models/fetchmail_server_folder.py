@@ -153,6 +153,14 @@ class FetchmailServerFolder(models.Model):
         "another value, or none, its UIDs mean other mail: the folder is not read "
         "and goes back to draft.",
     )
+    uid_validity_stopped_at = fields.Datetime(
+        string="Stopped at",
+        readonly=True,
+        copy=False,
+        help="When the folder was stopped because the server answered another "
+        "UIDVALIDITY than the one it remembers. Whoever sets the position of the "
+        "folder again can start it from the mail that came after this moment.",
+    )
     seen = fields.Selection(
         selection=[
             ("on_fetch", "Immediately on Fetch"),
@@ -336,7 +344,7 @@ class FetchmailServerFolder(models.Model):
         """
         self.ensure_one()
         remembered = self.uid_validity
-        self.write({"state": "draft"})
+        self.write({"state": "draft", "uid_validity_stopped_at": fields.Datetime.now()})
         raise UserError(
             _(
                 "The UIDVALIDITY of folder %(folder)s on server %(server)s is "
