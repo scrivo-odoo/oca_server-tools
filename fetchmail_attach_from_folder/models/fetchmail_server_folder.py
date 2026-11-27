@@ -150,8 +150,8 @@ class FetchmailServerFolder(models.Model):
         copy=False,
         help="The UIDVALIDITY of the folder when the last UID was taken. A text, "
         "because the server's number is 32 bits unsigned. When the server answers "
-        "another value, its UIDs mean other mail and the folder is read from its "
-        "start.",
+        "another value, or none, its UIDs mean other mail: the folder is not read "
+        "and goes back to draft.",
     )
     seen = fields.Selection(
         selection=[
@@ -327,18 +327,48 @@ class FetchmailServerFolder(models.Model):
         if (str(highest), uid_validity) != (self.last_uid, self.uid_validity):
             self.write({"last_uid": str(highest), "uid_validity": uid_validity})
 
+    def _stop_for_changed_uid_validity(self, uid_validity):
+        """Put the folder back to draft and refuse to read it.
+
+        The UIDs the folder remembers belong to the UIDVALIDITY it remembers. When the
+        server answers another value, or none, they mean other mail now, and reading
+        the folder as usual would take every mail in it for new.
+        """
+        self.ensure_one()
+        remembered = self.uid_validity
+        self.write({"state": "draft"})
+        raise UserError(
+            _(
+                "The UIDVALIDITY of folder %(folder)s on server %(server)s is "
+                "%(now)s, it was %(was)s when the last UID was taken: the UIDs "
+                "this folder remembers mean other mail now, so the folder is not "
+                "read and is back in draft. Its remembered position (Last UID and "
+                "UIDVALIDITY) has to be set again before it is confirmed."
+            )
+            % {
+                "folder": self.path,
+                "server": self.server_id.name,
+                "now": uid_validity or _("not given"),
+                "was": remembered,
+            }
+        )
+
     def retrieve_imap_folder(self, connection):
         """Retrieve all mails for one IMAP folder.
 
         With "Fetch New Mail Only" the folder asks the server for the UIDs after the
         last one it looked at, while the UIDVALIDITY of the folder is the one it
-        remembers; any other value, or none remembered, reads the folder as usual.
+        remembers. When it remembers one and the server answers another value, or
+        none, the folder is not read (`_stop_for_changed_uid_validity`); with none
+        remembered the folder is read as usual, for the first time.
         """
         self.ensure_one()
         criteria = self.get_criteria()
         uid_validity = was_new = False
         if self.fetch_new_uids_only:
             uid_validity = self._uid_validity(connection)
+            if self.uid_validity and uid_validity != self.uid_validity:
+                self._stop_for_changed_uid_validity(uid_validity)
             was_new = bool(
                 uid_validity and uid_validity == self.uid_validity and self.last_uid
             )

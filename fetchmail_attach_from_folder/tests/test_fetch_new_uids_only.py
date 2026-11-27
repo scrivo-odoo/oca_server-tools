@@ -1,9 +1,12 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
 import imaplib
 
+from odoo.exceptions import UserError
 from odoo.tools import mute_logger
 
 from .common import FOLDER, ImapCase, raw_mail
+
+FOLDER_LOGGER = "odoo.addons.fetchmail_attach_from_folder.models.fetchmail_server_folder"
 
 
 class TestFetchNewUidsOnly(ImapCase):
@@ -71,26 +74,62 @@ class TestFetchNewUidsOnly(ImapCase):
         self.assertEqual(self._pull(folder), [])
         self.assertEqual(folder.last_uid, "4")
 
-    def test_a_folder_made_again_is_read_from_its_start_without_doubles(self):
-        folder = self._folder()
+    def _made_again(self, folder):
+        """The folder is pulled once, deleted and made again with the same mail and a new one.
+
+        The server answers another UIDVALIDITY now, and the mail lies under UIDs 1 and
+        2, below the remembered last UID. Gives the UIDVALIDITY and the last UID the
+        folder remembered before.
+        """
         self._pull(folder)
-        old_validity = folder.uid_validity
+        old_validity, old_last = folder.uid_validity, folder.last_uid
         client = self.mailbox._client()
         try:
             client.delete(FOLDER)
         finally:
             client.logout()
-        # the same mail as a (same Message-ID) and a new one, now under UIDs 1 and 2,
-        # below the remembered last UID
         again = raw_mail(self.payer.email, "Invoice 1", f"{self.token}-a")
         self.mailbox.put(FOLDER, again)
         new = raw_mail(self.payer.email, "Invoice 3", f"{self.token}-e")
         self.mailbox.put(FOLDER, new)
         self.assertNotEqual(self.mailbox.state()[FOLDER][0], old_validity)
-        self.assertEqual(self._pull(folder), ["1", "2"])
-        self.assertEqual(self.attached("e").res_id, self.payer.id)
+        return old_validity, old_last
+
+    def test_a_folder_made_again_is_not_read_and_goes_back_to_draft(self):
+        """The UIDs it remembers mean other mail now: reading the whole folder would take
+        every mail in it for new."""
+        folder = self._folder()
+        old_validity, old_last = self._made_again(folder)
+        with mute_logger(FOLDER_LOGGER):
+            self.assertEqual(self._pull(folder), [])
+        self.assertEqual(folder.state, "draft")
+        self.assertEqual((folder.uid_validity, folder.last_uid), (old_validity, old_last))
+        self.assertFalse(self.attached("e"))
         self.assertEqual(len(self.attached("a")), 1)
-        self.assertEqual(folder.uid_validity, self.mailbox.state()[FOLDER][0])
+        with mute_logger(FOLDER_LOGGER):
+            self.assertEqual(self._pull(folder), [], "a folder in draft is pulled again")
+
+    def test_a_folder_made_again_says_in_words_why_it_is_not_read(self):
+        folder = self._folder()
+        old_validity, _old_last = self._made_again(folder)
+        connection = folder.server_id._connect__()
+        try:
+            with self.assertRaises(UserError) as caught:
+                folder.retrieve_imap_folder(connection)
+        finally:
+            connection.logout()
+        message = str(caught.exception)
+        new_validity = self.mailbox.state()[FOLDER][0]
+        for word in ("UIDVALIDITY", FOLDER, old_validity, new_validity, "not read"):
+            self.assertIn(word, message)
+
+    def test_a_folder_whose_server_no_longer_gives_a_uidvalidity_is_not_read(self):
+        folder = self._folder()
+        self._pull(folder)
+        self.patch(type(folder), "_uid_validity", lambda this, connection: False)
+        with mute_logger(FOLDER_LOGGER):
+            self.assertEqual(self._pull(folder), [])
+        self.assertEqual(folder.state, "draft")
         self.assertEqual(folder.last_uid, "2")
 
     def test_a_uid_above_the_signed_32_bit_range_is_kept_and_asked_for(self):
